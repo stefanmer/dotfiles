@@ -14,7 +14,7 @@ basic=(
 	.tmux.conf
 	.vimrc
 	.vim/
-	bin/
+	#bin/
 )
 
 full=(
