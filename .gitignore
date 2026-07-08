@@ -13,5 +13,7 @@ Thumbs.db
 .Spotlight-V100
 .Trashes
 
+.claude
+
 # Local bootstrap options (created by bootstrap.sh)
 .env
