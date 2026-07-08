@@ -181,3 +181,9 @@
 [init]
 
 	defaultBranch = main
+
+[include]
+
+	# Local, untracked settings — e.g. the Git identity written by
+	# bootstrap.sh. Last so its values win over anything above.
+	path = ~/.gitconfig.local
