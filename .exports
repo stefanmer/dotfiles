@@ -35,3 +35,9 @@ export GPG_TTY=$(tty);
 
 # Hide the “default interactive shell is now zsh” warning on macOS.
 export BASH_SILENCE_DEPRECATION_WARNING=1;
+
+# Disable mouse clicks in Claude.
+export CLAUDE_CODE_DISABLE_MOUSE_CLICKS=1;
+
+# Disable automatic path conversion in Git Bash on Windows.
+export MSYS_NO_PATHCONV=1;
