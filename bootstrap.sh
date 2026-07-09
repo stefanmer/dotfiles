@@ -20,7 +20,6 @@ basic=(
 full=(
 	.curlrc
 	.editorconfig
-	.gitattributes
 	.gitconfig
 	.wgetrc
 )

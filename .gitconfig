@@ -39,8 +39,6 @@
 
 [core]
 
-	autocrlf = true
-
 	# Use custom `.gitignore` and `.gitattributes`.
 	excludesfile = ~/.gitignore
 	attributesfile = ~/.gitattributes
