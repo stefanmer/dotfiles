@@ -18,3 +18,38 @@ fi;
 
 # Add `killall` tab completion for common apps
 complete -o "nospace" -W "Contacts Calendar Dock Finder Mail Safari iTunes SystemUIServer Terminal Twitter" killall;
+
+# Add tab completion for `helmsync`: flags, directories for the environment
+# path, release names from `helmsync -l -q` for services (already selected
+# services are filtered out)
+_helmsync() {
+	local cur flags services list_cmd i;
+	cur="${COMP_WORDS[COMP_CWORD]}";
+	flags='-h --help -s --skip-deps -c --concurrency -d --debug -f --fetch -t --template -l --list -q --quiet';
+
+	if [[ "${COMP_WORDS[COMP_CWORD - 1]}" == -c || "${COMP_WORDS[COMP_CWORD - 1]}" == --concurrency ]]; then
+		COMPREPLY=();
+	elif [[ "$cur" == -* ]]; then
+		COMPREPLY=($(compgen -W "$flags" -- "$cur"));
+	elif [[ "$cur" == */* || "$cur" == .* ]]; then
+		compopt -o filenames 2> /dev/null;
+		COMPREPLY=($(compgen -d -- "$cur"));
+	else
+		list_cmd=(helmsync -l -q);
+		if [[ $COMP_CWORD -gt 1 && ( "${COMP_WORDS[1]}" == */* || "${COMP_WORDS[1]}" == .* ) ]]; then
+			list_cmd=(helmsync "${COMP_WORDS[1]}" -l -q);
+		fi;
+		services=$("${list_cmd[@]}" 2> /dev/null | awk 'NR > 1 { print $1 }');
+		for ((i = 1; i < ${#COMP_WORDS[@]}; i++)); do
+			if [[ $i -ne $COMP_CWORD ]]; then
+				services=$(grep -vFx -- "${COMP_WORDS[i]}" <<< "$services");
+			fi;
+		done;
+		COMPREPLY=($(compgen -W "$services" -- "$cur"));
+		if [[ $COMP_CWORD -eq 1 ]]; then
+			compopt -o filenames 2> /dev/null;
+			COMPREPLY+=($(compgen -d -- "$cur"));
+		fi;
+	fi;
+}
+complete -F _helmsync helmsync;

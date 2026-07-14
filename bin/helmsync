@@ -1,0 +1,230 @@
+#!/usr/bin/env bash
+
+ASEE_HELMFILE_CHARTS_CACHE_PATH='./_cache'
+ASEE_HELMFILE_TEMPLATE_PATH='./_template'
+
+## COLORS — same palette and detection as ~/.bash_prompt; inherited values win
+if [ "$(tput colors 2> /dev/null || echo 0)" -ge 256 ]; then
+	: "${reset:=$(tput sgr0)}"
+	: "${blue:=$(tput setaf 33)}"
+	: "${gray:=$(tput setaf 240)}"
+	: "${green:=$(tput setaf 64)}"
+	: "${purple:=$(tput setaf 125)}"
+	: "${red:=$(tput setaf 124)}"
+	: "${yellow:=$(tput setaf 136)}"
+elif tput setaf 1 &> /dev/null; then
+	: "${bold:=$(tput bold)}"
+	: "${reset:=$(tput sgr0)}"
+	: "${blue:=$(tput setaf 4)}"
+	: "${gray:=${bold}$(tput setaf 0)}"
+	: "${green:=$(tput setaf 2)}"
+	: "${purple:=$(tput setaf 5)}"
+	: "${red:=$(tput setaf 1)}"
+	: "${yellow:=$(tput setaf 3)}"
+else
+	: "${reset:=\e[0m}"
+	: "${blue:=\e[1;34m}"
+	: "${gray:=\e[1;30m}"
+	: "${green:=\e[1;32m}"
+	: "${purple:=\e[1;35m}"
+	: "${red:=\e[1;31m}"
+	: "${yellow:=\e[1;33m}"
+fi
+
+## FUNCTIONS
+
+println() {
+	(( QUIET )) || echo -e "$@"
+}
+
+error() {
+	echo -e "${red}$*${reset}" >&2
+}
+
+fail() {
+	error "$@"
+	exit 1
+}
+
+fail_with_help() {
+	error "$@"
+	echo
+	show_help
+	exit 1
+}
+
+show_help() {
+	local QUIET='0'
+	println "Usage:"
+	println "  $(basename "$0") [<environment-path>] [<service_1> <service_2> ...] [options]"
+	println
+	println "An environment is a directory holding .env, .secrets and .versions, with"
+	println "helmfile.yaml in the directory itself (environment \"default\") or in its"
+	println "direct parent. The path argument must contain '/' or start with '.';"
+	println "when omitted the current directory is used."
+	println
+	println "Options:"
+	println "  -h, --help                Display this help message"
+	println "  -s, --skip-deps           Skip \"helm repo update\" and \"helm dependency build\""
+	println "  -c, --concurrency int     Maximum number of concurrent helm processes to run, 0 is unlimited"
+	println "  -d, --debug               Will debug helmfile"
+	println "  -f, --fetch               Fetch charts from state file"
+	println "  -t, --template            Template releases defined in state file"
+	println "  -l, --list                List releases defined in state file"
+	println "  -q, --quiet               Print only helmfile output"
+	println
+	println "Examples:"
+	println "  $(basename "$0") admin/dev authentication -s"
+	println "  $(basename "$0") authentication agent-ui"
+}
+
+## READ ATTRIBUTES
+
+ENV_DIR=''
+SERVICES=()
+OPERATION='sync'
+SKIP_DEPS='0'
+OPTIONS=()
+QUIET='0'
+
+while [ "$#" -gt 0 ]; do
+	case "$1" in
+		-h|--help)
+			show_help
+			exit 0
+			;;
+		-s|--skip-deps)
+			SKIP_DEPS='1'
+			;;
+		-c|--concurrency)
+			if [[ ! ${2-} =~ ^[0-9]+$ ]]; then
+				fail_with_help "Option $1 requires a numeric value"
+			fi
+			shift
+			OPTIONS+=(--concurrency "$1")
+			;;
+		-d|--debug)
+			OPTIONS+=(--debug)
+			;;
+		-f|--fetch)
+			OPERATION='fetch'
+			;;
+		-t|--template)
+			OPERATION='template'
+			;;
+		-l|--list)
+			OPERATION='list'
+			;;
+		-q|--quiet)
+			QUIET='1'
+			OPTIONS+=(-q)
+			;;
+		*)
+			if [[ "$1" == */* || "$1" == .* ]]; then
+				if [[ -z $ENV_DIR && ${#SERVICES[@]} -eq 0 ]]; then
+					ENV_DIR="$1"
+				else
+					fail_with_help "Environment path must be the first argument: $1"
+				fi
+			else
+				SERVICES+=("$1")
+			fi
+			;;
+	esac
+	shift
+done
+
+## RESOLVE ENVIRONMENT
+
+if [[ -z $ENV_DIR ]]; then
+	ENV_DIR='.'
+fi
+
+if [[ ! -d $ENV_DIR ]]; then
+	fail "Not a directory: ${yellow}${ENV_DIR}"
+fi
+
+ENV_DIR=$(cd -- "$ENV_DIR" && pwd)
+
+if [[ -f "$ENV_DIR/helmfile.yaml" ]]; then
+	PROJECT_DIR="$ENV_DIR"
+	ENVIRONMENT='default'
+elif [[ -f "$(dirname "$ENV_DIR")/helmfile.yaml" ]]; then
+	PROJECT_DIR="$(dirname "$ENV_DIR")"
+	ENVIRONMENT="$(basename "$ENV_DIR")"
+else
+	fail "No helmfile.yaml found in ${yellow}${ENV_DIR}${red} or its parent directory"
+fi
+
+PROJECT="$(basename "$PROJECT_DIR")"
+
+for env_file in .env .secrets .versions; do
+	if [[ ! -f "$ENV_DIR/$env_file" ]]; then
+		fail "Not an environment directory, ${yellow}${ENV_DIR}${red} is missing ${yellow}${env_file}"
+	fi
+done
+
+## IMPORT VARIABLES
+
+CURRENT_CONTEXT=$(kubectl config current-context 2> /dev/null)
+println "Project:     ${blue}${PROJECT}${reset}"
+println "Environment: ${blue}${ENVIRONMENT}${reset}"
+
+cd -- "$PROJECT_DIR"
+
+. "$ENV_DIR/.env"
+if (($?)); then
+	fail "Failed importing ${yellow}.env"
+fi
+
+. "$ENV_DIR/.secrets"
+if (($?)); then
+	fail "Failed importing ${yellow}.secrets"
+fi
+
+. "$ENV_DIR/.versions"
+if (($?)); then
+	fail "Failed importing ${yellow}.versions"
+fi
+
+println "Context:     ${green}${CURRENT_CONTEXT}${reset}"
+println "Namespace:   ${green}${ASEE_K8S_NAMESPACE}${reset}"
+
+## EXECUTE
+
+if [[ "$OPERATION" == 'fetch' ]]; then
+	if [[ -z "${ASEE_HELMFILE_CHARTS_CACHE_PATH}" ]]; then
+		fail "Variable ASEE_HELMFILE_CHARTS_CACHE_PATH not set"
+	fi
+	OPTIONS+=(--output-dir-template "${ASEE_HELMFILE_CHARTS_CACHE_PATH}/{{.Release.Name}}/{{.Release.Version}}")
+elif [[ "$OPERATION" == 'template' ]]; then
+	if [[ -z "${ASEE_HELMFILE_TEMPLATE_PATH}" ]]; then
+		fail "Variable ASEE_HELMFILE_TEMPLATE_PATH not set"
+	fi
+	OPTIONS+=(--output-dir-template "${ASEE_HELMFILE_TEMPLATE_PATH}/{{.Release.Name}}")
+fi
+
+if (( SKIP_DEPS )); then
+	OPTIONS+=(--skip-deps)
+fi
+
+HELMFILE_ARGS=(-e "$ENVIRONMENT" -n "$ASEE_K8S_NAMESPACE")
+
+if (( ${#SERVICES[@]} )); then
+	println "Selected:"
+	for service in "${SERVICES[@]}"; do
+		println "  ${purple}${service}${reset}"
+		HELMFILE_ARGS+=(-l "service=${service}")
+	done
+fi
+println
+
+HELMFILE_ARGS+=("$OPERATION")
+HELMFILE_ARGS+=("${OPTIONS[@]}")
+
+println "${yellow}helmfile ${HELMFILE_ARGS[*]}${reset}"
+println "${gray}"
+helmfile "${HELMFILE_ARGS[@]}"
+EXIT_CODE=$?
+println -n "${reset}"
+exit $EXIT_CODE
