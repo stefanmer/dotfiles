@@ -136,7 +136,7 @@ build_prompt() {
 	# left-side content simply overwrites it. The format is a fixed
 	# 12 columns wide, so the position never shifts.
 	if [ "${PROMPT_SHOW_TIME}" = "1" ]; then
-		PS1+="\[\033[$(( ${COLUMNS:-80} - 11 ))G${reset}${gray}\D{%H:%M %d.%m.}\r\]";
+		PS1+="\[\033[$(( ${COLUMNS:-80} - 11 ))G${reset}${gray}\D{%d.%m. %H:%M}\r\]";
 	fi;
 
 	if [ "${PROMPT_SHOW_USER}" = "1" ]; then
