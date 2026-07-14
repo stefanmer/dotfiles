@@ -44,6 +44,11 @@ function targz() {
 	echo "${tmpFile}.gz ($((zippedSize / 1000)) kB) created successfully.";
 }
 
+# List files in long format, filtered to those matching the given pattern
+function lf() {
+	command ls -laF | awk -v pattern="${1}" 'NR == 1 || $0 ~ pattern';
+}
+
 # Determine size of a file or total size of a directory
 function fs() {
 	if du -b /dev/null > /dev/null 2>&1; then
