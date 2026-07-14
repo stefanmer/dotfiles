@@ -105,6 +105,7 @@ fi;
 PROMPT_SHOW_USER="${PROMPT_SHOW_USER:-1}";
 PROMPT_SHOW_HOST="${PROMPT_SHOW_HOST:-1}";
 PROMPT_SHOW_GIT="${PROMPT_SHOW_GIT:-0}";
+PROMPT_SHOW_TIME="${PROMPT_SHOW_TIME:-1}";
 PROMPT_PATH_STYLE="${PROMPT_PATH_STYLE:-full}"; # full | base | none
 
 # Rebuild PS1 from the configuration variables. Runs before every prompt
@@ -129,6 +130,14 @@ build_prompt() {
 		PS1+="\n"; # blank line between the previous output and the prompt
 	fi;
 	PROMPT_CLEAN=0;
+
+	# Right-aligned time: jump to the right edge, print, and return with
+	# `\r` — net zero width, so readline’s line math stays intact. Long
+	# left-side content simply overwrites it. The format is a fixed
+	# 12 columns wide, so the position never shifts.
+	if [ "${PROMPT_SHOW_TIME}" = "1" ]; then
+		PS1+="\[\033[$(( ${COLUMNS:-80} - 11 ))G${reset}${gray}\D{%H:%M %d.%m.}\r\]";
+	fi;
 
 	if [ "${PROMPT_SHOW_USER}" = "1" ]; then
 		PS1+="\[${userStyle}\]\u"; # username
@@ -160,10 +169,9 @@ build_prompt() {
 		# itself. This is the only mode where GIT_PS1_SHOWCOLORHINTS
 		# colors the state flags.
 		__git_ps1 "${PS1}" "${suffix}" "\[${reset}${gray}\](\[${orange}\]%s\[${gray}\])";
-		return;
+	else
+		PS1+="${suffix}";
 	fi;
-
-	PS1+="${suffix}";
 }
 
 # `build_prompt` must run first in PROMPT_COMMAND so it sees the last

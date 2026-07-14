@@ -151,6 +151,7 @@ function tre() {
 #   prompt                    # return to the defaults
 #   prompt host               # toggle the hostname segment
 #   prompt git                # toggle the Git segment
+#   prompt time               # toggle the time segment
 #   prompt path               # toggle the path segment on/off
 #   prompt path base          # full | base
 #   prompt minimal            # just `dirname $`
@@ -167,6 +168,9 @@ function prompt() {
 			;;
 		git)
 			PROMPT_SHOW_GIT=$(( 1 - PROMPT_SHOW_GIT ));
+			;;
+		time)
+			PROMPT_SHOW_TIME=$(( 1 - PROMPT_SHOW_TIME ));
 			;;
 		path)
 			case "${1}" in
@@ -189,25 +193,28 @@ function prompt() {
 			PROMPT_SHOW_USER=0;
 			PROMPT_SHOW_HOST=0;
 			PROMPT_SHOW_GIT=0;
+			PROMPT_SHOW_TIME=0;
 			PROMPT_PATH_STYLE='base';
 			;;
 		full)
 			PROMPT_SHOW_USER=1;
 			PROMPT_SHOW_HOST=1;
 			PROMPT_SHOW_GIT=1;
+			PROMPT_SHOW_TIME=1;
 			PROMPT_PATH_STYLE='full';
 			;;
 		'')
 			PROMPT_SHOW_USER=1;
 			PROMPT_SHOW_HOST=1;
 			PROMPT_SHOW_GIT=0;
+			PROMPT_SHOW_TIME=1;
 			PROMPT_PATH_STYLE='full';
 			;;
 		*)
 			cat >&2 <<-'EOF'
 			usage:
 			  prompt                    return to the defaults
-			  prompt user|host|git      toggle a segment
+			  prompt user|host|git|time toggle a segment
 			  prompt path [full|base]   toggle the path segment, or set its style
 			  prompt minimal            just `dirname $`
 			  prompt full               everything on
