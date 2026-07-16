@@ -24,6 +24,10 @@ full=(
 	.wgetrc
 )
 
+# Paths (relative to $HOME) no longer in the dotfiles; removed at install time.
+remove=(
+)
+
 old_public_ssh_keys=(
 )
 
@@ -101,29 +105,59 @@ if [ "$tier" = "full" ] && [ -f "$HOME/.gitconfig" ] && [ ! -e "$HOME/.gitconfig
 fi
 
 confirm_all=$force
-for file in "${replace[@]}"; do
-	target="$HOME/$file"
+install_file() {
+	local src="$1"
+	local target="$HOME/$src"
+	local do_copy=1
 	if [ -e "$target" ]; then
-		if git --no-pager diff --no-index --quiet -- "$target" "$file" 2> /dev/null; then
-			continue
-		fi
-		if [ "$confirm_all" -eq 0 ]; then
-			git --no-pager diff --no-index -- "$target" "$file" || true
-			read -rp "Replace $file? [y]es/[N]o/[a]ll/[q]uit: " answer
+		if git --no-pager diff --no-index --quiet -- "$target" "$src" 2> /dev/null; then
+			do_copy=0
+		elif [ "$confirm_all" -eq 0 ]; then
+			git --no-pager diff --no-index -- "$target" "$src" || true
+			read -rp "Replace $src? [y]es/[N]o/[a]ll/[q]uit: " answer
 			case "$answer" in
 				y) ;;
 				a) confirm_all=1 ;;
 				q) exit 0 ;;
-				*) continue ;;
+				*) do_copy=0 ;;
 			esac
 		fi
 	fi
-	if [ -f "$file" ]; then
-		cp "$file" "$target"
-		chmod 640 "$target"
+	if [ "$do_copy" -eq 1 ]; then
+		mkdir -p "$(dirname "$target")"
+		cp "$src" "$target"
+		if [[ "$src" == bin/* ]]; then
+			chmod 750 "$target"
+		else
+			chmod 640 "$target"
+		fi
+	fi
+}
+
+for file in "${replace[@]}"; do
+	if [ -d "$file" ]; then
+		while IFS= read -r -u 9 -d '' src; do
+			install_file "$src"
+		done 9< <(find "$file" -type f -print0 | sort -z)
 	else
-		rm -rf "$target"
-		cp -rT "$file" "$target"
+		install_file "$file"
+	fi
+done
+
+for file in "${remove[@]}"; do
+	target="$HOME/$file"
+	if [ -e "$target" ] || [ -L "$target" ]; then
+		do_remove=$force
+		if [ "$force" -eq 0 ]; then
+			read -rp "Remove ~/$file? [y]es/[N]o: " answer
+			if [ "$answer" = "y" ]; then
+				do_remove=1
+			fi
+		fi
+		if [ "$do_remove" -eq 1 ]; then
+			rm -rf "$target"
+			echo "Removed ~/$file."
+		fi
 	fi
 done
 
